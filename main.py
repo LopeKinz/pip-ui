@@ -4,7 +4,9 @@ from tkinter import messagebox
 import subprocess
 import pkg_resources
 import pip
-from pip._internal.utils.misc import get_installed_distributions
+import xmlrpc.client
+import sys
+
 
 class PackageManagerApp:
     def __init__(self, root):
@@ -56,13 +58,17 @@ class PackageManagerApp:
         search_query = self.search_var.get().lower()
 
         if self.switch_var.get() == "installed":
-            packages = get_installed_distributions()
+            packages = [pkg.project_name for pkg in pkg_resources.working_set]
         else:
-            packages = [pkg for pkg in pip.search.simple_search(search_query, project_urls=False)]
+            if not search_query:
+                messagebox.showwarning("Search Warning", "Please enter a search query for downloadable packages.")
+                return
+
+            client = xmlrpc.client.ServerProxy('https://pypi.org/pypi')
+            packages = [pkg['name'] for pkg in client.search({'name': search_query, 'description': search_query})]
 
         for package in packages:
-            if search_query in package.project_name.lower():
-                self.package_listbox.insert(tk.END, package.project_name)
+            self.package_listbox.insert(tk.END, package)
 
     def show_install_button(self, event):
         selected_package = self.package_listbox.get(tk.ACTIVE)
@@ -75,9 +81,19 @@ class PackageManagerApp:
         selected_package = self.package_listbox.get(tk.ACTIVE)
         if selected_package:
             try:
-                subprocess.check_output([sys.executable, '-m', 'pip', 'install', selected_package])
+                # Run pip install command and capture the output
+                result = subprocess.run([sys.executable, '-m', 'pip', 'install', selected_package],
+                                        capture_output=True, text=True, check=True)
+
+                # Display the installation output in the console log
+                self.console_log.config(state=tk.NORMAL)
+                self.console_log.delete(1.0, tk.END)
+                self.console_log.insert(tk.END, result.stdout)
+                self.console_log.insert(tk.END, result.stderr)
+                self.console_log.config(state=tk.DISABLED)
+
                 messagebox.showinfo("Installation Successful", f"{selected_package} has been successfully installed.")
-            except Exception as e:
+            except subprocess.CalledProcessError as e:
                 messagebox.showerror("Installation Error", f"An error occurred during the installation of {selected_package}:\n{e}")
             self.install_button["state"] = tk.DISABLED
 
@@ -91,3 +107,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = PackageManagerApp(root)
     root.mainloop()
+

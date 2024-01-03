@@ -4,7 +4,8 @@ from tkinter import messagebox
 import subprocess
 import pkg_resources
 import pip
-import xmlrpc.client
+import requests
+from bs4 import BeautifulSoup
 import sys
 
 
@@ -64,8 +65,12 @@ class PackageManagerApp:
                 messagebox.showwarning("Search Warning", "Please enter a search query for downloadable packages.")
                 return
 
-            client = xmlrpc.client.ServerProxy('https://pypi.org/pypi')
-            packages = [pkg['name'] for pkg in client.search({'name': search_query, 'description': search_query})]
+            pypi_url = "https://pypi.org/simple/"
+            response = requests.get(pypi_url)
+            soup = BeautifulSoup(response.content, "html.parser")
+            package_elements = soup.find_all("a", href=True)
+
+            packages = [pkg.text for pkg in package_elements if search_query in pkg.text.lower()]
 
         for package in packages:
             self.package_listbox.insert(tk.END, package)
@@ -107,4 +112,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = PackageManagerApp(root)
     root.mainloop()
-
